@@ -1,4 +1,7 @@
 def img
+def projectName = 'simpleFlask'
+def version = "0.0.${currentBuild.number}"
+def dockerImageTag = "${projectName}:${version}"
 pipeline {
     environment {
         registry = "kss7/python-jenkins" //To push an image to Docker Hub, you must first name your local image using your Docker Hub username and the repository name that you created through Docker Hub on the web.
@@ -28,48 +31,24 @@ pipeline {
                     img = registry + ":${env.BUILD_ID}"
                     println ("${img}")
                     dockerImage = docker.build("${img}")
+                 
                 }
             }
         }
 
 
 
-        stage('Test - Run Docker Container on Jenkins node') {
-           steps {
+        
 
-                sh label: '', script: "docker run -d --name ${JOB_NAME} -p 5000:5000 ${img}"
-          }
-        }
-
-        stage('Push To DockerHub') {
-            steps {
-                script {
-                    docker.withRegistry( 'https://registry.hub.docker.com ', registryCredential ) {
-                        dockerImage.push()
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Test Server') {
-            steps {
-                script {
-                    def stopcontainer = "docker stop ${JOB_NAME}"
-                    def delcontName = "docker rm ${JOB_NAME}"
-                    def delimages = 'docker image prune -a --force'
-                    def drun = "docker run -d --name ${JOB_NAME} -p 5000:5000 ${img}"
-                    println "${drun}"
-                    sshagent(['docker-test']) {
-                        sh returnStatus: true, script: "ssh -o StrictHostKeyChecking=no docker@192.168.1.16 ${stopcontainer} "
-                        sh returnStatus: true, script: "ssh -o StrictHostKeyChecking=no docker@192.168.1.16 ${delcontName}"
-                        sh returnStatus: true, script: "ssh -o StrictHostKeyChecking=no docker@192.168.1.16 ${delimages}"
-
-                    // some block
-                        sh "ssh -o StrictHostKeyChecking=no docker@192.168.1.16 ${drun}"
-                    }
-                }
-            }
-        }
+        stage('Deploy Container To Openshift') {
+          steps {
+            sh "oc login https://linuxops-miss31.conygre.com:8443 --username admin --password admin --insecure-skip-tls-verify=true"
+            sh "oc project ${projectName} || oc new-project ${projectName}"
+            sh "oc delete all --selector app=${projectName} || echo 'Unable to delete all previous openshift resources'"
+            sh "oc new-app ${dockerImageTag} -l version=${version}"
+            sh "oc expose svc/${projectName}"
+      }
+    }
 
 
     }}
