@@ -1,5 +1,5 @@
 def img
-def projectName = 'simpleFlask'
+def projectName = 'simple-flask'
 def version = "0.0.${currentBuild.number}"
 def dockerImageTag = "${projectName}:${version}"
 pipeline {
